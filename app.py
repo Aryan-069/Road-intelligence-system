@@ -234,6 +234,16 @@ elif page == "Damage Inspection":
                 verbose=False,
             )[0]
 
+            st.write("Detections:", len(result.boxes))
+
+            if result.boxes is not None:
+                for box in result.boxes:
+                    class_id = int(box.cls.item())
+                    score = float(box.conf.item())
+                    st.write(
+                        f"Class: {model.names[class_id]} | " f"Confidence: {score:.3f}"
+                    )
+
         annotated = Image.fromarray(result.plot()[..., ::-1])
 
         left, right = st.columns(2)

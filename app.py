@@ -229,7 +229,7 @@ elif page == "Damage Inspection":
             result = model.predict(
                 source=image,
                 imgsz=640,
-                conf=confidence,
+                conf=0.10,
                 device="cpu",
                 verbose=False,
             )[0]

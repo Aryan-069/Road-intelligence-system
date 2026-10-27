@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+21431547/
+dataset_yolo/
+runs/
+weights/
+last.pt
+yolo26n.pt

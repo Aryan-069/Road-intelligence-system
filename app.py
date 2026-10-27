@@ -5,6 +5,9 @@ import pandas as pd
 from PIL import Image
 from ultralytics import YOLO
 
+import tempfile
+import cv2
+
 st.set_page_config(
     page_title="Road Intelligence | AI Dashboard",
     page_icon="🛣️",
@@ -143,7 +146,13 @@ with st.sidebar:
 
     page = st.radio(
         "NAVIGATION",
-        ["Overview", "Damage Inspection", "About Project"],
+        [
+            "Overview",
+            "Damage Inspection",
+            "Video Inspection",
+            "Live Camera",
+            "About Project",
+        ],
     )
 
     st.divider()
@@ -302,6 +311,101 @@ elif page == "Damage Inspection":
     else:
         st.info("Upload an image to start a road inspection.")
 
+elif page == "Video Inspection":
+    st.markdown(
+        '<div class="section-title">Recorded Video Inspection</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.write(
+        "Upload a road video to detect cracks and potholes "
+        "using your trained YOLO26n model."
+    )
+
+    video_file = st.file_uploader(
+        "Upload road video",
+        type=["mp4", "avi", "mov", "mkv"],
+        key="road_video_upload",
+    )
+
+    if video_file is not None:
+        if st.button("Analyze Video", type="primary"):
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as temp_input:
+                temp_input.write(video_file.getvalue())
+                input_path = temp_input.name
+
+            output_path = tempfile.mktemp(suffix=".mp4")
+
+            cap = cv2.VideoCapture(input_path)
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+
+            if not cap.isOpened() or total_frames <= 0:
+                st.error("Could not read this video. Try another file.")
+            else:
+                fps = fps if fps > 0 else 25
+                writer = cv2.VideoWriter(
+                    output_path,
+                    cv2.VideoWriter_fourcc(*"mp4v"),
+                    fps,
+                    (width, height),
+                )
+
+                progress = st.progress(0)
+                status = st.empty()
+                frame_number = 0
+                detection_count = 0
+
+                try:
+                    while True:
+                        success, frame = cap.read()
+                        if not success:
+                            break
+
+                        results = model.predict(
+                            source=frame,
+                            imgsz=480,
+                            conf=0.25,
+                            device="cpu",
+                            verbose=False,
+                        )
+
+                        annotated_frame = results[0].plot()
+                        writer.write(annotated_frame)
+                        detection_count += len(results[0].boxes)
+                        frame_number += 1
+
+                        if frame_number % 5 == 0:
+                            progress.progress(min(frame_number / total_frames, 1.0))
+                            status.write(
+                                f"Processing frame {frame_number} "
+                                f"of {total_frames}..."
+                            )
+                finally:
+                    cap.release()
+                    writer.release()
+
+                progress.progress(1.0)
+                status.success("Video processing complete!")
+
+                st.metric("Frames processed", frame_number)
+                st.metric("Total detections across frames", detection_count)
+
+                with open(output_path, "rb") as output_file:
+                    processed_video = output_file.read()
+
+                st.video(processed_video)
+                st.download_button(
+                    "Download Annotated Video",
+                    data=processed_video,
+                    file_name="road_damage_annotated.mp4",
+                    mime="video/mp4",
+                )
+
+                Path(input_path).unlink(missing_ok=True)
+                Path(output_path).unlink(missing_ok=True)
 
 else:
     st.markdown(

@@ -230,7 +230,7 @@ elif page == "Damage Inspection":
                 source=image,
                 imgsz=640,
                 conf=confidence,
-                device=0,
+                device="cpu",
                 verbose=False,
             )[0]
 

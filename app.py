@@ -7,6 +7,12 @@ from ultralytics import YOLO
 
 import tempfile
 import cv2
+import av
+from streamlit_webrtc import (
+    VideoProcessorBase,
+    WebRtcMode,
+    webrtc_streamer,
+)
 
 st.set_page_config(
     page_title="Road Intelligence | AI Dashboard",
@@ -138,6 +144,27 @@ footer {
 def load_model(model_path):
     return YOLO(str(model_path))
 
+class RoadDamageProcessor(VideoProcessorBase):
+    def __init__(self, model):
+        self.model = model
+
+    def recv(self, frame):
+        image = frame.to_ndarray(format="bgr24")
+
+        results = self.model.predict(
+            source=image,
+            imgsz=480,
+            conf=0.25,
+            device="cpu",
+            verbose=False,
+        )
+
+        annotated = results[0].plot()
+
+        return av.VideoFrame.from_ndarray(
+            annotated,
+            format="bgr24",
+        )
 
 with st.sidebar:
     st.markdown("## 🛣️ ROAD AI")
@@ -406,6 +433,26 @@ elif page == "Video Inspection":
 
                 Path(input_path).unlink(missing_ok=True)
                 Path(output_path).unlink(missing_ok=True)
+
+elif page == "Live Camera":
+    st.markdown(
+        '<div class="section-title">Live Road Inspection</div>',
+        unsafe_allow_html=True,
+    )
+
+    st.write("Allow camera access to detect road damage in real time.")
+
+    webrtc_streamer(
+        key="road-damage-live",
+        mode=WebRtcMode.SENDRECV,
+        video_processor_factory=lambda: RoadDamageProcessor(model),
+        media_stream_constraints={"video": True, "audio": False},
+        async_processing=True,
+    )
+
+    st.caption(
+        "Predictions are AI estimates and may miss or misclassify damage."
+    )
 
 else:
     st.markdown(
